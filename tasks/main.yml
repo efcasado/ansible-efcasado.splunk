@@ -1,0 +1,99 @@
+---
+# tasks file for efcasado.splunk
+- name: check if splunk is installed
+  shell: "rpm -q splunk-{{ splunk_version }}-{{ splunk_build }}"
+  register: splunk_installed
+  ignore_errors: True
+
+- name: disable selinux
+  selinux:
+    state: disabled
+  notify:
+    - restart server
+    - wait for server to be down
+    - wait for server to boot
+
+- name: upload splunk rpm
+  copy:
+    src: "{{ splunk_file }}"
+    dest: "/tmp/{{ splunk_file }}"
+  when: splunk_installed is failed
+
+- name: install splunk
+  yum:
+    name: "/tmp/{{ splunk_file }}"
+    state: present
+  when: splunk_installed is failed
+
+- meta: flush_handlers
+
+- name: accept license
+  command: "/opt/splunk/bin/splunk {{ item }}"
+  when: splunk_installed is failed
+  with_items:
+    - start --accept-license --answer-yes --no-prompt
+    - enable boot-start
+
+- name: disable splunk web
+  blockinfile:
+    path: "{{ splunk_home_dir}}/etc/system/local/web.conf"
+    create: yes
+    block: |
+      [settings]
+      startwebserver = 0
+  when: splunk_node_type == "slave"
+  notify:
+    - restart splunk
+
+- name: configure clustering
+  blockinfile:
+    path: "{{ splunk_home_dir }}/etc/system/local/server.conf"
+    block: |
+
+      [clustering]
+      mode         = slave
+      pass4SymmKey = {{ splunk_shared_secret }}
+      master_uri   = {{ splunk_master_uri }}
+
+      [replication_port://9887]
+  notify:
+    - restart splunk
+  when: splunk_node_type == "slave"
+
+- name: configure clustering
+  blockinfile:
+    path: "{{ splunk_home_dir }}/etc/system/local/server.conf"
+    block: |
+
+      [clustering]
+      mode               = master
+      pass4SymmKey       = {{ splunk_shared_secret }}
+      replication_factor = {{ splunk_clustering_replication_factor }}
+      search_factor      = {{ splunk_clustering_search_factor }}
+  notify:
+    - restart splunk
+  when: splunk_node_type == "master"
+
+- name: configure clustering
+  blockinfile:
+    path: "{{ splunk_home_dir }}/etc/system/local/server.conf"
+    block: |
+
+      [clustering]
+      mode         = searchhead
+      pass4SymmKey = {{ splunk_shared_secret }}
+      master_uri   = {{ splunk_master_uri }}
+  notify:
+    - restart splunk
+  when: splunk_node_type == "searchhead"
+
+- name: configure inputs.conf
+  blockinfile:
+    path: "{{ splunk_home_dir }}/etc/system/local/inputs.conf"
+    block: |
+      [tcp://1514]
+      connection_host = dns
+      sourcetype = syslog
+  notify:
+    - restart splunk
+  when: splunk_node_type == "slave"

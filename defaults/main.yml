@@ -1,0 +1,13 @@
+---
+splunk_node_type: searchhead
+splunk_version: 7.0.3
+splunk_build: fa31da744b51
+splunk_base_url: "https://download.splunk.com/products/splunk/releases"
+# splunk_file: "splunk-{{ splunk_version }}-{{ splunk_build }}-Linux-x86_64.tgz"
+splunk_file: "splunk-{{ splunk_version }}-{{ splunk_build }}-linux-2.6-x86_64.rpm"
+splunk_url: "{{ splunk_base_url }}/{{ splunk_version }}/{{ splunk_file }}"
+splunk_shared_secret: th1s1s4s3cr3t
+splunk_home_dir: /opt/splunk
+splunk_master_uri: "https://{{ groups['master'][0] }}:8089"
+splunk_clustering_replication_factor: 3
+splunk_clustering_search_factor: 2
